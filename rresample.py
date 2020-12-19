@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import math
 import os
@@ -5,6 +6,26 @@ import ffmpeg
 import resample
 import datetime
 import argparse
+
+#from plexapi.myplex import MyPlexAccount
+
+import plexapi
+#from plexapi import compat
+#from plexapi.client import PlexClient
+#from plexapi.server import PlexServer
+
+SERVER_BASEURL = plexapi.CONFIG.get('auth.server_baseurl')
+MYPLEX_USERNAME = plexapi.CONFIG.get('auth.myplex_username')
+MYPLEX_PASSWORD = plexapi.CONFIG.get('auth.myplex_password')
+CLIENT_BASEURL = plexapi.CONFIG.get('auth.client_baseurl')
+CLIENT_TOKEN = plexapi.CONFIG.get('auth.client_token')
+
+
+def tvshows(plex):
+    return plex.library.section('TV Shows')
+
+def movies(plex):
+    return plex.library.section('Movies')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -14,6 +35,7 @@ if __name__ == '__main__':
                         action="store_true")
     parser.add_argument("-k", "--keep", help="delete original files", action="store_true")
     parser.add_argument("-r", "--bitrate", help="bitrate threshold (kbps) to resample", default=2000)
+    parser.add_argument("-w", "--watched", help="only resample if plex has marked as watched", action="store_true")
     args = parser.parse_args()
 
     if not args.input:
@@ -21,6 +43,7 @@ if __name__ == '__main__':
         exit(-1)
     print(sys.argv[1])
     max_br = args.bitrate * 1000
+    cmds_to_process = []
 #    fname = args.input
     # if !isdir
     if os.path.isfile(args.input):
@@ -31,41 +54,88 @@ if __name__ == '__main__':
     elif os.path.isdir(args.input):
         print("process directory recursively")
         files_to_process = {}
-        cmds_to_process = []
         for (dirpath, dirnames, filenames) in os.walk(args.input):
             for filename in filenames:
+                audio_params = "copy"
+                video_params = "copy"
+                sub_params = "mov_text -metadata:s:s:0 language=eng"
                 try:
+                    # logic is: test each file if they have any of the following:
+                    # video bitrate > 2000kbps or video codec is h265, convert to h264
+                    # not aac, convert to aac
+                    convert = False
                     pathfilename = os.sep.join([dirpath, filename])
                     specs = ffmpeg.probe(pathfilename)
                     fmt = specs["format"]
                     br = int(fmt["bit_rate"])
+                    container = "mp4"
+                    #resolution = specs["resolution"]
+
+                    filesize = int(fmt["size"])/1000000
                     ac = 0
-                    duration = 0;
+                    duration = 0
                     for stream in specs["streams"]:
                         if stream["codec_type"] == "audio":
                             ac = int(stream["channels"])
+                            #if not aac, convert it to that
+                            if stream["codec_name"] != "aac":
+                                audio_params = "aac"
+                                convert = True
+                                if args.verbosity > 0:
+                                    print("converting %s's audio to aac because its %s" % (filename, stream["codec_name"]))
+                        if fmt["format_name"].find("matroska") != -1:
+                            pass    # convert mkv to mp4
+                            convert = True
+                            container = "mp4"
+                            if args.verbosity > 0:
+                                print("converting %s because its matroska" % (filename))
+
                         if stream.get("duration",-1) == -1:
-                            if False:
-#                           if stream.get("tags",-1) is not -1:
-                                tags = stream.get("tags")
-                                s = [value for key, value in tags.items() if 'duration' in key.lower()]
-                                ms = date.strptime(s)
-                                duration = float(s[0])
-                                print("found a duration of %f in tags" % duration)
+                            pass
+                            duration = 100      # REMOVE!!!!
                         else:
                             duration = stream["duration"]
-                    #if (br > 66666666 or ac > 2) and ac > 0:
+
                     if float(duration) < 10:
+                        convert = False
                         if args.verbosity > 1:
     #                        print("skipping %s invalid duration" % (filename))
                             print("%s is not a valid video file" % os.sep.join([dirpath, filename]))
-                    elif br < max_br:
-                        print("skipping %s bitrate:%ik (%i MB)" % (filename, br / 1000, int(fmt["size"])/1000000))
+                    #elif br < max_br:
+                    #    convert = False
+                    #    print("skipping %s bitrate:%ik (%i MB)" % (filename, br / 1000, int(fmt["size"])/1000000))
+                    #elif (br > max_br) and (filesize < 500):
+                    #    print("skipping %s bitrate:%ik but filesize is only %i MB" % (filename, br / 1000, filesize))
+                    elif (br > max_br):
+                        convert = True
+                        video_params = "h264"
                     else:
+                        pass
+
+                    if convert:
                         if args.nop:
-                            print("resample %s bitrate:%ik (%i MB)" % (filename, br / 1000, int(fmt["size"])/1000000))
-                        else:
-                            files_to_process[pathfilename] = pathfilename
+                            if args.verbosity > 0:
+                                #print("resample %s bitrate:%ik (%i MB)" % (filename, br / 1000, int(fmt["size"])/1000000))
+                                print("resample %s (%ikbps/%0.2fMbps) using %s and %s" % (filename, br / 1000, br / (1000000), video_params, audio_params))
+                        tempf = pathfilename + ".new.mp4"
+                        cmdline = "%s %s %s" % (audio_params,video_params,sub_params)
+                        params = {}
+                        params["audio"]  = audio_params
+                        params["video"] = video_params
+                        params["subs"] = sub_params
+                        stats ={}
+                        stats["bitrate"] = br
+                        stats["filesize"] = filesize
+                        stats["format"] = fmt["format_name"]
+                        stats["ac"] = ac
+                        files_to_process[pathfilename] = pathfilename
+                        cmd ={}
+                        cmd["fname"] = pathfilename
+                        #cmd["params"] = cmdline
+                        cmd["params"] = params
+                        cmd["stats"] = stats
+                        cmd["tmpfname"] = tempf
+                        cmds_to_process.append(cmd)
 
 #                        print("%s is below bitrate threshold" % pathfilename)
                 except KeyError:
@@ -78,24 +148,31 @@ if __name__ == '__main__':
                     msg = str(ex.stderr).split(":")[-1]
                     print(msg)
                     if args.verbosity > 1:
-                        if msg.rfind("Invalid") is not -1:
+                        if msg.rfind("Invalid") != -1:
                             print("%s is not a valid video file" % os.sep.join([dirpath, filename]))
                         else:
                             print("%s causes unknown exception" % os.sep.join([dirpath, filename]))
 
     #print(files_to_process)
-    for fname in files_to_process:
+    for cmd in cmds_to_process:
+        fname = cmd["fname"]
         tf = fname + ".new.mp4"
         if os.path.exists(tf) and not args.nop:
             os.remove(tf)
-        specs = ffmpeg.probe(fname)
-        fmt = specs["format"]
-        br = int(fmt["bit_rate"])
+        #specs = ffmpeg.probe(fname)
+        fmt = cmd["stats"]["format"]
+        #br = int(fmt["bit_rate"])
+        br = cmd["stats"]["bitrate"]
+        stats = cmd["stats"]
+        params = cmd["params"]
+        print("resample %s (%ikbps/%0.2fMbps), size %iMB using %s and %s" % (fname, br / 1000, br / (1000000), stats["filesize"], params["video"], params["audio"] ))
         if args.nop:
-            print("resample %s (%ikbps/%0.2fMbps)" % (fname,br/1000,br/(1000000)))
+
             result = False
         else:
-            result = resample.resample(fname, tf)
+            result = resample.resample(fname, tf, params=params)
+#            subp = subprocess.Popen(['ffmpeg','-i','fname',params,tf],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+#            stdout,stderr = subp.communicate()
         if result is True and args.keep is False:
             os.remove(fname)
             os.rename(tf,fname)

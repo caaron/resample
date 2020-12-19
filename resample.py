@@ -4,15 +4,19 @@ import math
 import os
 
 
-def resample(fname,tempname):
+def resample(fname,tempname, params=None):
     try:
         stream = ffmpeg.input(fname)
-        stream = ffmpeg.output(stream, tempname, vcodec="h264", crf=25, acodec="aac", ac=2, ar=48000)
+        vcodec = params.get("video","h264")
+        acodec = params.get("audio", "aac")
+#        stream = ffmpeg.output(stream, tempname, vcodec=vcodec, crf=25, acodec=acodec, ar=48000, map="0")
+        stream = ffmpeg.output(stream, tempname, vcodec=vcodec, crf=30, acodec=acodec)
         #ffmpeg.run(stream,capture_stdout=True)
         ffmpeg.run(stream)
         return True
     except Exception as ex:
         template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+        
         message = template.format(type(ex).__name__, ex.args)
         print(message)
         return False
