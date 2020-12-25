@@ -154,6 +154,7 @@ if __name__ == '__main__':
                             print("%s causes unknown exception" % os.sep.join([dirpath, filename]))
 
     #print(files_to_process)
+    print("Files to be processed:")
     for cmd in cmds_to_process:
         fname = cmd["fname"]
         tf = fname + ".new.mp4"
