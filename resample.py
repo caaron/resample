@@ -9,8 +9,9 @@ def resample(fname,tempname, params=None):
         stream = ffmpeg.input(fname)
         vcodec = params.get("video","h264")
         acodec = params.get("audio", "aac")
+        vidbr =  params.get("vidbr", "2000k")
 #        stream = ffmpeg.output(stream, tempname, vcodec=vcodec, crf=25, acodec=acodec, ar=48000, map="0")
-        stream = ffmpeg.output(stream, tempname, vcodec=vcodec, crf=30, acodec=acodec)
+        stream = ffmpeg.output(stream, tempname, vcodec=vcodec, **{'b:v':vidbr}, acodec=acodec)
         #ffmpeg.run(stream,capture_stdout=True)
         ffmpeg.run(stream)
         return True

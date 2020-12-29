@@ -42,7 +42,7 @@ if __name__ == '__main__':
         print("missing file or directory name. exiting...")
         exit(-1)
     print(sys.argv[1])
-    max_br = args.bitrate * 1000
+    max_br = int(args.bitrate) * 1000
     cmds_to_process = []
 #    fname = args.input
     # if !isdir
@@ -86,7 +86,7 @@ if __name__ == '__main__':
                         if fmt["format_name"].find("matroska") != -1:
                             pass    # convert mkv to mp4
                             convert = True
-                            container = "mp4"
+                            container = "mkv"
                             if args.verbosity > 0:
                                 print("converting %s because its matroska" % (filename))
 
@@ -123,6 +123,7 @@ if __name__ == '__main__':
                         params["audio"]  = audio_params
                         params["video"] = video_params
                         params["subs"] = sub_params
+                        params["vidbr"] = str(args.bitrate) + 'k'
                         stats ={}
                         stats["bitrate"] = br
                         stats["filesize"] = filesize
@@ -135,6 +136,9 @@ if __name__ == '__main__':
                         cmd["params"] = params
                         cmd["stats"] = stats
                         cmd["tmpfname"] = tempf
+                        cmd["container"] = container
+                        if container == "mkv":
+                            cmd["newfname"] = os.path.splitext(pathfilename)[0] + ".mp4"
                         cmds_to_process.append(cmd)
 
 #                        print("%s is below bitrate threshold" % pathfilename)
@@ -168,7 +172,6 @@ if __name__ == '__main__':
         params = cmd["params"]
         print("resample %s (%ikbps/%0.2fMbps), size %iMB using %s and %s" % (fname, br / 1000, br / (1000000), stats["filesize"], params["video"], params["audio"] ))
         if args.nop:
-
             result = False
         else:
             result = resample.resample(fname, tf, params=params)
@@ -176,7 +179,11 @@ if __name__ == '__main__':
 #            stdout,stderr = subp.communicate()
         if result is True and args.keep is False:
             os.remove(fname)
-            os.rename(tf,fname)
+            if cmd["container"] == "mkv":
+                os.rename(tf,cmd["newfname"])
+            else:
+                os.rename(tf,fname)
+
             print("Resampled " + fname)
         elif args.keep is False:
             pass
