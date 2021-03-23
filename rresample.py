@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--nop", help="no action, just print info and what would be done",
                         action="store_true")
     parser.add_argument("-k", "--keep", help="delete original files", action="store_true")
+    parser.add_argument("-m", "--mkv", help="convert mkv to mp4 even if just copy", action="store_true")
     parser.add_argument("-r", "--bitrate", help="bitrate threshold (kbps) to resample", default=2000)
     parser.add_argument("-w", "--watched", help="only resample if plex has marked as watched", action="store_true")
     args = parser.parse_args()
@@ -83,8 +84,8 @@ if __name__ == '__main__':
                                 convert = True
                                 if args.verbosity > 0:
                                     print("converting %s's audio to aac because its %s" % (filename, stream["codec_name"]))
-                        if fmt["format_name"].find("matroska") != -1:
-                            pass    # convert mkv to mp4
+                        if fmt["format_name"].find("matroska") != -1 and args.mkv is True:
+                            pass    # convert mkv to mp4                            
                             convert = True
                             container = "mkv"
                             if args.verbosity > 0:
