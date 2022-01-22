@@ -2,6 +2,7 @@ import ffmpeg
 import sys
 import math
 import os
+import argparse
 
 
 def resample(fname,tempname, params=None):
@@ -24,18 +25,33 @@ def resample(fname,tempname, params=None):
 
 
 if __name__ == '__main__':
-    print(sys.argv[1])
-    fname = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i","--input", help="file or directory to process")
+    parser.add_argument("-v", "--verbosity", help="verbosity", action="count", default = 0 )
+    parser.add_argument("-n", "--nop", help="no action, just print info and what would be done",
+                        action="store_true")
+    parser.add_argument("-r", "--bitrate", help="bitrate threshold (kbps) to resample", default=2000)
+    parser.add_argument("-ac", "--audioCodec", help="audio codec", default="aac")
+    args = parser.parse_args()
+
+    if not args.input:
+        print("missing file or directory name. exiting...")
+        exit(-1)
+
+    print(args.input)
+    fname = args.input
 
     specs = ffmpeg.probe(fname)
     f = specs["format"]
-    print(specs)
+    if args.verbosity > 0:
+        print(specs)
 
     input = ffmpeg.input(fname)
     audio = input.audio
 
     rate = int(f["bit_rate"])
-    print(rate)
+    if args.verbosity > 0:
+        print("bitrate:{0}",rate)
     duration = float(specs["format"]["duration"])
     print("duration:" + duration)
     mins = float(duration)/60
