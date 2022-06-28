@@ -40,7 +40,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.input:
-        print("missing file or directory name. exiting...")
+        parser.print_help(sys.stderr)
         exit(-1)
     print(sys.argv[1])
     max_br = int(args.bitrate) * 1000
